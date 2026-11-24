@@ -1,0 +1,74 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --background: #f0f2f5;
+    --foreground: #111b21;
+    --card: #ffffff;
+    --card-foreground: #111b21;
+    --primary: #16a34a;
+    --primary-foreground: #ffffff;
+    --sidebar: #ffffff;
+    --chat-bubble-out: #d9fdd3;
+    --chat-bubble-in: #ffffff;
+    --border: #e9edef;
+  }
+
+  .dark {
+    --background: #0c1317;
+    --foreground: #e9edef;
+    --card: #111b21;
+    --card-foreground: #e9edef;
+    --primary: #22c55e;
+    --primary-foreground: #0b141a;
+    --sidebar: #111b21;
+    --chat-bubble-out: #005c4b;
+    --chat-bubble-in: #202c33;
+    --border: #222d34;
+  }
+
+  * {
+    border-color: var(--border);
+  }
+
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+}
+
+/* WhatsApp style scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(134, 150, 160, 0.35);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(134, 150, 160, 0.6);
+}
+
+/* Chat background subtle doodle pattern */
+.chat-wallpaper-doodle {
+  background-color: #0b141a;
+  background-image: radial-gradient(#1f2c34 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+.chat-wallpaper-doodle-light {
+  background-color: #efeae2;
+  background-image: radial-gradient(#d1d7db 1px, transparent 1px);
+  background-size: 24px 24px;
+}
