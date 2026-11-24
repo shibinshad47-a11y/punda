@@ -196,6 +196,15 @@ export const dataService = {
     const clean = query.trim().toLowerCase().replace('@', '');
 
     if (!isSupabaseConfigured()) {
+      try {
+        const res = await fetch(`/api/sync?action=users&q=${encodeURIComponent(clean)}&userId=${currentUserId}`);
+        if (res.ok) {
+          const list = await res.json();
+          if (Array.isArray(list) && list.length > 0) return list;
+        }
+      } catch (err) {
+        console.warn('searchUsers sync error:', err);
+      }
       return DEMO_USERS.filter(
         (u) =>
           u.id !== currentUserId &&
@@ -225,6 +234,15 @@ export const dataService = {
   // 2. Friendships
   async getFriends(currentUserId: string): Promise<Friendship[]> {
     if (!isSupabaseConfigured()) {
+      try {
+        const res = await fetch(`/api/sync?action=friends&userId=${currentUserId}`);
+        if (res.ok) {
+          const list = await res.json();
+          if (Array.isArray(list) && list.length > 0) return list;
+        }
+      } catch (err) {
+        console.warn('getFriends sync error:', err);
+      }
       const saved = typeof window !== 'undefined' ? localStorage.getItem(STORAGE_FRIENDS) : null;
       if (saved) return JSON.parse(saved);
 
@@ -373,6 +391,15 @@ export const dataService = {
   // 4. Conversations
   async getConversations(currentUserId: string): Promise<Conversation[]> {
     if (!isSupabaseConfigured()) {
+      try {
+        const res = await fetch(`/api/sync?action=conversations&userId=${currentUserId}`);
+        if (res.ok) {
+          const list = await res.json();
+          if (Array.isArray(list) && list.length > 0) return list;
+        }
+      } catch (err) {
+        console.warn('getConversations sync error:', err);
+      }
       const saved = typeof window !== 'undefined' ? localStorage.getItem(STORAGE_CONVERSATIONS) : null;
       if (saved) return JSON.parse(saved);
       const defaults = getInitialConversations(currentUserId);
@@ -503,6 +530,17 @@ export const dataService = {
   // 5. Messages
   async getMessages(conversationId: string, currentUserId: string): Promise<Message[]> {
     if (!isSupabaseConfigured()) {
+      try {
+        const res = await fetch(`/api/sync?action=messages&conversationId=${conversationId}`);
+        if (res.ok) {
+          const list = await res.json();
+          if (Array.isArray(list)) {
+            return list.filter((m: Message) => !m.deleted_for?.includes(currentUserId));
+          }
+        }
+      } catch (err) {
+        console.warn('getMessages sync error:', err);
+      }
       const saved = typeof window !== 'undefined' ? localStorage.getItem(STORAGE_MESSAGES) : null;
       const allMsgs = saved ? JSON.parse(saved) : getInitialMessages(currentUserId);
       return (allMsgs[conversationId] || []).filter(
@@ -561,11 +599,23 @@ export const dataService = {
     };
 
     if (!isSupabaseConfigured()) {
+      try {
+        await fetch('/api/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'send_message', message: newMsg }),
+        });
+      } catch (err) {
+        console.warn('sendMessage sync error:', err);
+      }
+
       const saved = typeof window !== 'undefined' ? localStorage.getItem(STORAGE_MESSAGES) : null;
       const allMsgs = saved ? JSON.parse(saved) : getInitialMessages(senderId);
       if (!allMsgs[conversationId]) allMsgs[conversationId] = [];
       allMsgs[conversationId].push(newMsg);
-      localStorage.setItem(STORAGE_MESSAGES, JSON.stringify(allMsgs));
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(STORAGE_MESSAGES, JSON.stringify(allMsgs));
+      }
 
       // Update conversation timestamp
       const convs = await this.getConversations(senderId);
@@ -573,7 +623,9 @@ export const dataService = {
       if (conv) {
         conv.last_message = newMsg;
         conv.updated_at = newMsg.created_at;
-        localStorage.setItem(STORAGE_CONVERSATIONS, JSON.stringify(convs));
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(STORAGE_CONVERSATIONS, JSON.stringify(convs));
+        }
       }
       return newMsg;
     }
@@ -605,7 +657,18 @@ export const dataService = {
   },
 
   async addReaction(messageId: string, userId: string, emoji: string): Promise<void> {
-    if (!isSupabaseConfigured()) return;
+    if (!isSupabaseConfigured()) {
+      try {
+        await fetch('/api/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'react_message', messageId, userId, emoji }),
+        });
+      } catch (err) {
+        console.warn('addReaction sync error:', err);
+      }
+      return;
+    }
     try {
       const supabase = getSupabaseClient();
       await supabase.from('message_reactions').upsert({
@@ -625,6 +688,15 @@ export const dataService = {
     deleteForEveryone: boolean
   ): Promise<void> {
     if (!isSupabaseConfigured()) {
+      try {
+        await fetch('/api/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'delete_message', messageId, userId: currentUserId, forEveryone: deleteForEveryone }),
+        });
+      } catch (err) {
+        console.warn('deleteMessage sync error:', err);
+      }
       const saved = typeof window !== 'undefined' ? localStorage.getItem(STORAGE_MESSAGES) : null;
       if (!saved) return;
       const allMsgs = JSON.parse(saved);
@@ -664,6 +736,15 @@ export const dataService = {
   // 6. Statuses
   async getStatuses(userId?: string): Promise<Status[]> {
     if (!isSupabaseConfigured()) {
+      try {
+        const res = await fetch('/api/sync?action=statuses');
+        if (res.ok) {
+          const list = await res.json();
+          if (Array.isArray(list) && list.length > 0) return list;
+        }
+      } catch (err) {
+        console.warn('getStatuses sync error:', err);
+      }
       const saved = typeof window !== 'undefined' ? localStorage.getItem(STORAGE_STATUSES) : null;
       if (saved) return JSON.parse(saved);
 
@@ -736,9 +817,20 @@ export const dataService = {
     };
 
     if (!isSupabaseConfigured()) {
+      try {
+        await fetch('/api/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'post_status', status: newStatus }),
+        });
+      } catch (err) {
+        console.warn('postStatus sync error:', err);
+      }
       const list = await this.getStatuses(userId);
       list.unshift(newStatus);
-      localStorage.setItem(STORAGE_STATUSES, JSON.stringify(list));
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(STORAGE_STATUSES, JSON.stringify(list));
+      }
       return newStatus;
     }
 
@@ -768,6 +860,15 @@ export const dataService = {
   // 7. Calls History
   async getCalls(userId?: string): Promise<Call[]> {
     if (!isSupabaseConfigured()) {
+      try {
+        const res = await fetch(`/api/sync?action=calls&userId=${userId || ''}`);
+        if (res.ok) {
+          const list = await res.json();
+          if (Array.isArray(list) && list.length > 0) return list;
+        }
+      } catch (err) {
+        console.warn('getCalls sync error:', err);
+      }
       const saved = typeof window !== 'undefined' ? localStorage.getItem(STORAGE_CALLS) : null;
       if (saved) return JSON.parse(saved);
 
@@ -841,9 +942,20 @@ export const dataService = {
     };
 
     if (!isSupabaseConfigured()) {
+      try {
+        await fetch('/api/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'log_call', call: newCall }),
+        });
+      } catch (err) {
+        console.warn('logCall sync error:', err);
+      }
       const calls = await this.getCalls(callerId);
       calls.unshift(newCall);
-      localStorage.setItem(STORAGE_CALLS, JSON.stringify(calls));
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(STORAGE_CALLS, JSON.stringify(calls));
+      }
       return;
     }
 

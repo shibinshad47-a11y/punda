@@ -144,9 +144,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Fallback to local persistent demo session if not configured yet
         setIsDemo(true);
         const savedDemo = typeof window !== 'undefined' ? localStorage.getItem('punda_demo_user') : null;
-        const activeProfile = savedDemo ? JSON.parse(savedDemo) : DEMO_USERS[0];
-        setProfile(activeProfile);
-        setUser({ id: activeProfile.id, email: `${activeProfile.username}@punda.app` } as unknown as User);
+        if (savedDemo) {
+          try {
+            const activeProfile = JSON.parse(savedDemo);
+            setProfile(activeProfile);
+            setUser({ id: activeProfile.id, email: `${activeProfile.username}@punda.app` } as unknown as User);
+          } catch {
+            setProfile(null);
+            setUser(null);
+          }
+        } else {
+          setProfile(null);
+          setUser(null);
+        }
         setLoading(false);
         return;
       }
@@ -228,12 +238,38 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     if (isDemo || !isSupabaseConfigured()) {
-      // Find matching demo user or sign in with primary
-      const matched = DEMO_USERS.find((u) => u.username.toLowerCase() === email.toLowerCase() || email.includes(u.username)) || DEMO_USERS[0];
-      setProfile(matched);
-      setUser({ id: matched.id, email: `${matched.username}@punda.app` } as unknown as User);
-      localStorage.setItem('punda_demo_user', JSON.stringify(matched));
-      return {};
+      try {
+        const res = await fetch('/api/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'login', email, password }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          const matched = DEMO_USERS.find(
+            (u) => u.username.toLowerCase() === email.toLowerCase() || email.includes(u.username)
+          );
+          if (matched) {
+            setProfile(matched);
+            setUser({ id: matched.id, email: `${matched.username}@punda.app` } as unknown as User);
+            localStorage.setItem('punda_demo_user', JSON.stringify(matched));
+            return {};
+          }
+          return { error: data.error || 'User not found. Please create an account.' };
+        }
+        setProfile(data.profile);
+        setUser({ id: data.profile.id, email: `${data.profile.username}@punda.app` } as unknown as User);
+        localStorage.setItem('punda_demo_user', JSON.stringify(data.profile));
+        return {};
+      } catch {
+        const matched = DEMO_USERS.find(
+          (u) => u.username.toLowerCase() === email.toLowerCase() || email.includes(u.username)
+        ) || DEMO_USERS[0];
+        setProfile(matched);
+        setUser({ id: matched.id, email: `${matched.username}@punda.app` } as unknown as User);
+        localStorage.setItem('punda_demo_user', JSON.stringify(matched));
+        return {};
+      }
     }
 
     try {
@@ -271,26 +307,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     if (isDemo || !isSupabaseConfigured()) {
-      const newUser: Profile = {
-        id: `demo-${Date.now()}`,
-        name: data.name,
-        username: data.username.toLowerCase().replace(/[^a-z0-9_]/g, ''),
-        phone: data.phone || null,
-        avatar_url: null,
-        about: 'Hey there! I am using PUNDA.',
-        last_seen: new Date().toISOString(),
-        is_online: true,
-        privacy_last_seen: 'everyone',
-        privacy_avatar: 'everyone',
-        privacy_about: 'everyone',
-        wallpaper: 'default',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
-      setProfile(newUser);
-      setUser({ id: newUser.id, email: data.email } as unknown as User);
-      localStorage.setItem('punda_demo_user', JSON.stringify(newUser));
-      return {};
+      try {
+        const res = await fetch('/api/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'register', data }),
+        });
+        const result = await res.json();
+        if (!res.ok) {
+          return { error: result.error || 'Failed to create account.' };
+        }
+        setProfile(result.profile);
+        setUser({ id: result.profile.id, email: data.email } as unknown as User);
+        localStorage.setItem('punda_demo_user', JSON.stringify(result.profile));
+        return {};
+      } catch (err: unknown) {
+        return { error: err instanceof Error ? err.message : 'Network error during signup' };
+      }
     }
 
     try {

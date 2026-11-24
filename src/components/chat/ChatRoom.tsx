@@ -94,42 +94,71 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
 
   // Realtime subscription for instant messaging
   useEffect(() => {
-    if (!isSupabaseConfigured() || !profile) return;
+    if (!profile) return;
 
-    const supabase = getSupabaseClient();
-    const channel = supabase
-      .channel(`chat-${conversation.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'messages',
-          filter: `conversation_id=eq.${conversation.id}`,
-        },
-        async (payload) => {
-          const newMsg = payload.new as Message;
-          if (newMsg.sender_id !== profile.id) {
-            soundManager.playMessageReceived();
+    if (isSupabaseConfigured()) {
+      const supabase = getSupabaseClient();
+      const channel = supabase
+        .channel(`chat-${conversation.id}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'messages',
+            filter: `conversation_id=eq.${conversation.id}`,
+          },
+          async (payload) => {
+            const newMsg = payload.new as Message;
+            if (newMsg.sender_id !== profile.id) {
+              soundManager.playMessageReceived();
+            }
+            setMessages((prev) => {
+              if (prev.some((m) => m.id === newMsg.id)) return prev;
+              return [...prev, newMsg];
+            });
+            scrollToBottom();
           }
-          setMessages((prev) => {
-            if (prev.some((m) => m.id === newMsg.id)) return prev;
-            return [...prev, newMsg];
-          });
-          scrollToBottom();
-        }
-      )
-      .on('broadcast', { event: 'typing' }, (payload) => {
-        if (payload.payload.userId !== profile.id) {
-          setOtherUserTyping(true);
-          setTimeout(() => setOtherUserTyping(false), 2500);
-        }
-      })
-      .subscribe();
+        )
+        .on('broadcast', { event: 'typing' }, (payload) => {
+          if (payload.payload.userId !== profile.id) {
+            setOtherUserTyping(true);
+            setTimeout(() => setOtherUserTyping(false), 2500);
+          }
+        })
+        .subscribe();
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
+      return () => {
+        supabase.removeChannel(channel);
+      };
+    } else {
+      // Live server polling fallback for instant cross-device chat sync
+      const interval = setInterval(async () => {
+        try {
+          const res = await fetch(`/api/sync?action=messages&conversationId=${conversation.id}`);
+          if (res.ok) {
+            const serverMsgs: Message[] = await res.json();
+            setMessages((prev) => {
+              if (serverMsgs.length > prev.length) {
+                const latest = serverMsgs[serverMsgs.length - 1];
+                if (latest && latest.sender_id !== profile.id) {
+                  soundManager.playMessageReceived();
+                }
+                setTimeout(() => scrollToBottom(), 50);
+                return serverMsgs;
+              }
+              return prev;
+            });
+          }
+        } catch {
+          // ignore network hiccup
+        }
+      }, 1500);
+
+      return () => {
+        clearInterval(interval);
+      };
+    }
   }, [conversation.id, profile, scrollToBottom]);
 
   // Broadcast typing

@@ -20,6 +20,7 @@ import { ActiveCallModal } from '../calls/ActiveCallModal';
 import { AuthScreen } from '../auth/AuthScreen';
 import { SplashScreen } from '../common/SplashScreen';
 import { useSearchParams } from 'next/navigation';
+import { isSupabaseConfigured } from '@/lib/supabase/client';
 
 export const AppShell: React.FC = () => {
   const { user, profile, loading: authLoading } = useAuth();
@@ -67,6 +68,15 @@ export const AppShell: React.FC = () => {
   useEffect(() => {
     loadConversations();
   }, [loadConversations]);
+
+  // Periodic conversations update for multi-device live sync
+  useEffect(() => {
+    if (isSupabaseConfigured() || !profile) return;
+    const interval = setInterval(() => {
+      loadConversations();
+    }, 3500);
+    return () => clearInterval(interval);
+  }, [loadConversations, profile]);
 
   const activeConversation = conversations.find((c) => c.id === activeConversationId);
 
